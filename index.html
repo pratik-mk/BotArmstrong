@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rocket Landing</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="top">
+        <div class="titles">
+          <p class="eyebrow">Live in your browser</p>
+          <h1>Rocket Landing</h1>
+          <p class="lede">
+            Learn from random weights, or load the landing weights for a network that already touches down.
+          </p>
+        </div>
+        <div class="top-actions">
+          <div class="speeds" role="group" aria-label="Simulation speed">
+            <button type="button" data-speed="1">1×</button>
+            <button type="button" data-speed="4">4×</button>
+            <button type="button" data-speed="16">16×</button>
+          </div>
+          <button type="button" id="pause">Pause</button>
+          <button type="button" id="landing">Landing weights</button>
+          <button type="button" id="reset">Reset brain</button>
+          <button type="button" id="save">Save</button>
+          <button type="button" id="load">Load</button>
+          <p id="note" class="note"></p>
+        </div>
+      </header>
+      <div class="layout">
+        <section class="stage" aria-label="Landing view">
+          <canvas id="world"></canvas>
+          <div id="banner" class="banner" hidden></div>
+        </section>
+        <aside>
+          <section>
+            <h2>Flight</h2>
+            <p class="hint">Green numbers are inside the landing band.</p>
+            <div id="telemetry"></div>
+          </section>
+          <section>
+            <h2>Learning</h2>
+            <div id="stats"></div>
+            <div class="plot-wrap"><canvas id="chart"></canvas></div>
+          </section>
+          <section>
+            <h2>Network</h2>
+            <p class="hint">Hidden cells and action values for the decision it just made. Keys 1, 2, 3 change speed. Space pauses.</p>
+            <div class="plot-wrap net-wrap"><canvas id="net"></canvas></div>
+          </section>
+          <section>
+            <h2>World</h2>
+            <p class="hint">Changing a slider clears old experience and keeps the current weights.</p>
+            <div id="params"></div>
+          </section>
+        </aside>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
