@@ -3,6 +3,7 @@ import {
   ARENA_HALF,
   DT,
   LIMITS,
+  REWARD,
   MAX_ALT,
   MAX_STEPS,
   SENSOR_RANGE,
@@ -101,13 +102,29 @@ export class LanderEnv {
     return { reward, done, outcome }
   }
 
+  /** One learner action: 0 idle, 1 main, 2 left, 3 right. */
   step(action: number): StepResult {
+    const burn = action === 1
+    const turn = action === 2 ? -1 : action === 3 ? 1 : 0
+    return this.advance(burn, turn, action, false)
+  }
+
+  /**
+   * Manual flight. Thrust and rotation can run in the same step.
+   * `turn` is -1 left, 1 right, 0 none.
+   */
+  stepPilot(burn: boolean, turn: -1 | 0 | 1): StepResult {
+    const action = burn ? 1 : turn < 0 ? 2 : turn > 0 ? 3 : 0
+    return this.advance(burn, turn, action, burn && turn !== 0)
+  }
+
+  private advance(burn: boolean, turn: -1 | 0 | 1, action: number, extraFuel: boolean): StepResult {
     if (this.done) {
       return { reward: 0, done: true, outcome: this.outcome }
     }
     this.prevObs.set(this.obs)
     const st = this.state
-    const fired = this.integrate(action)
+    const fired = this.integrate(burn, turn)
     this.steps += 1
     this.sense()
 
@@ -136,13 +153,8 @@ export class LanderEnv {
     }
 
     const phi = potential(st)
-    const reward = stepReward(
-      this.prevPhi,
-      phi,
-      action,
-      outcome,
-      fired,
-    )
+    let reward = stepReward(this.prevPhi, phi, action, outcome, fired)
+    if (extraFuel && fired) reward -= REWARD.fuelRcs
     this.prevPhi = phi
     this.episodeReturn += reward
     this.lastReward = reward
@@ -162,24 +174,22 @@ export class LanderEnv {
     this.state.rightContact = right.y <= SENSOR_RANGE ? 1 : 0
   }
 
-  /** Returns whether an engine actually fired. */
-  private integrate(action: number): boolean {
+  /** Returns whether an engine actually fired. `turn` is -1 left, 1 right. */
+  private integrate(burn: boolean, turn: -1 | 0 | 1): boolean {
     const st = this.state
     const dt = DT
     let thrust = 0
     let torque = 0
     let burned = 0
     if (st.fuel > 0) {
-      const burn = mainBurnPerSec(this.params)
-      if (action === 1) {
+      const rate = mainBurnPerSec(this.params)
+      if (burn) {
         thrust = this.params.mainAcc
-        burned = burn * dt
-      } else if (action === 2) {
-        torque = -this.params.rcsAcc
-        burned = burn * 0.22 * dt
-      } else if (action === 3) {
-        torque = this.params.rcsAcc
-        burned = burn * 0.22 * dt
+        burned += rate * dt
+      }
+      if (turn !== 0) {
+        torque = turn * this.params.rcsAcc
+        burned += rate * 0.22 * dt
       }
       if (burned > 0) {
         if (burned >= st.fuel) {

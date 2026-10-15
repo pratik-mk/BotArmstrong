@@ -108,7 +108,7 @@ button:focus-visible, input:focus-visible {
   min-width: 46px;
 }
 
-.speeds button.on {
+.speeds button.on, #play.on {
   background: var(--copper);
   color: #2a1608;
 }
@@ -151,6 +151,26 @@ button:focus-visible, input:focus-visible {
 .banner[data-kind="land"] { color: var(--teal); border-color: rgba(125, 222, 196, 0.5); }
 .banner[data-kind="crash"] { color: var(--red); border-color: rgba(255, 109, 125, 0.5); }
 .banner[data-kind="timeout"] { color: var(--copper-2); }
+
+.stick {
+  position: absolute;
+  left: 50%;
+  bottom: 52px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 2;
+}
+
+.stick button {
+  min-width: 72px;
+  background: rgba(12, 14, 20, 0.72);
+}
+
+.stick button.on {
+  background: var(--copper);
+  color: #2a1608;
+}
 
 aside {
   max-height: calc(100vh - 150px);

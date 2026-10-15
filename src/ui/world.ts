@@ -16,6 +16,7 @@ export interface SceneFrame {
   mood: Outcome
   paused: boolean
   fixed: boolean
+  manual: boolean
   time: number
   shake: number
   dt: number
@@ -483,5 +484,6 @@ function drawHud(ctx: CanvasRenderingContext2D, frame: SceneFrame): void {
   ctx.fillText(`ATTEMPT ${frame.episode}`, 16, 16)
   ctx.fillStyle = 'rgba(226, 214, 190, 0.75)'
   ctx.font = '12px "Avenir Next", "Segoe UI", sans-serif'
-  ctx.fillText(frame.paused ? 'Paused' : frame.fixed ? 'Landing weights' : 'Training', 16, 36)
+  const status = frame.paused ? 'Paused' : frame.manual ? 'Manual' : frame.fixed ? 'Landing weights' : 'Training'
+  ctx.fillText(status, 16, 36)
 }

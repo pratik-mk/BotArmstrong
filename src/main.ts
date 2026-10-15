@@ -32,7 +32,51 @@ let lastOutcome: Outcome = 'fly'
 let acc = 0
 let held = 0
 let holdReward = 0
+let manual = false
+const heldKeys = new Set<string>()
+const stickHeld = { burn: false, left: false, right: false }
 const decisionObs = new Float64Array(10)
+const stickNode = document.querySelector<HTMLElement>('#stick')
+if (!stickNode) throw new Error('Missing controls')
+const stick: HTMLElement = stickNode
+const stickButtons = [...stick.querySelectorAll<HTMLButtonElement>('[data-pilot]')]
+
+function pressStick(kind: string, down: boolean): void {
+  if (kind === 'burn') stickHeld.burn = down
+  else if (kind === 'left') stickHeld.left = down
+  else stickHeld.right = down
+}
+
+for (const button of stickButtons) {
+  const kind = button.dataset.pilot ?? 'right'
+  button.addEventListener('pointerdown', (event) => {
+    event.preventDefault()
+    pressStick(kind, true)
+    button.blur()
+    try {
+      button.setPointerCapture(event.pointerId)
+    } catch {
+      // The button still counts as held until pointerup.
+    }
+  })
+  const release = () => pressStick(kind, false)
+  button.addEventListener('pointerup', release)
+  button.addEventListener('pointercancel', release)
+}
+
+function pilotInput(): { burn: boolean; turn: -1 | 0 | 1 } {
+  const left = heldKeys.has('ArrowLeft') || heldKeys.has('KeyA') || stickHeld.left
+  const right = heldKeys.has('ArrowRight') || heldKeys.has('KeyD') || stickHeld.right
+  const burn = heldKeys.has('ArrowUp') || heldKeys.has('KeyW') || stickHeld.burn
+  return { burn, turn: left === right ? 0 : left ? -1 : 1 }
+}
+
+function commandLabel(burn: boolean, turn: number): string {
+  const spin = turn < 0 ? 'Left' : turn > 0 ? 'Right' : ''
+  if (burn && spin) return `Main + ${spin}`
+  if (burn) return 'Main'
+  return spin || 'Idle'
+}
 
 const worldNode = document.querySelector<HTMLCanvasElement>('#world')
 const chartNode = document.querySelector<HTMLCanvasElement>('#chart')
@@ -53,6 +97,7 @@ const panel = mountPanel(params, {
   onSave: () => saveBrain(),
   onLoad: () => loadBrain(),
   onLanding: () => void loadLandingWeights(),
+  onPlay: () => setManual(!manual),
   onParam: (key, value) => {
     if (params[key] === value) return
     params[key] = value
@@ -67,7 +112,13 @@ panel.setNote('Weights start random and keep learning. Landing weights fly a sav
 
 window.addEventListener('keydown', (event) => {
   const tag = (event.target as HTMLElement | null)?.tagName
-  if (tag === 'INPUT' || tag === 'BUTTON' || tag === 'TEXTAREA') return
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return
+  if (manual && (event.code === 'ArrowUp' || event.code === 'ArrowLeft' || event.code === 'ArrowRight' || event.code === 'KeyW' || event.code === 'KeyA' || event.code === 'KeyD')) {
+    event.preventDefault()
+    heldKeys.add(event.code)
+    return
+  }
+  if (tag === 'BUTTON') return
   if (event.code === 'Space') {
     event.preventDefault()
     setPaused(!paused)
@@ -75,6 +126,10 @@ window.addEventListener('keydown', (event) => {
   else if (event.key === '2') setSpeed(4)
   else if (event.key === '3') setSpeed(16)
 })
+window.addEventListener('keyup', (event) => {
+  heldKeys.delete(event.code)
+})
+window.addEventListener('blur', () => heldKeys.clear())
 
 function setSpeed(next: 1 | 4 | 16): void {
   speed = next
@@ -84,6 +139,49 @@ function setSpeed(next: 1 | 4 | 16): void {
 function setPaused(next: boolean): void {
   paused = next
   panel.setPaused(next)
+}
+
+function leaveManual(): void {
+  if (!manual) return
+  manual = false
+  panel.setManual(false)
+  heldKeys.clear()
+  stickHeld.burn = false
+  stickHeld.left = false
+  stickHeld.right = false
+  stick.hidden = true
+}
+
+function setManual(next: boolean): void {
+  if (next === manual) return
+  leaveManual()
+  if (!next) {
+    env.reset()
+    holdUntil = 0
+    bannerUntil = 0
+    acc = 0
+    held = 0
+    holdReward = 0
+    banner.hidden = true
+    lastOutcome = 'fly'
+    panel.setNote('Back to training. The brain is unchanged.')
+    return
+  }
+  manual = true
+  panel.setManual(true)
+  stick.hidden = false
+  env.reset()
+  holdUntil = 0
+  bannerUntil = 0
+  acc = 0
+  held = 0
+  holdReward = 0
+  banner.hidden = true
+  lastOutcome = 'fly'
+  setSpeed(1)
+  setPaused(false)
+  panel.setNote('You have the stick. ↑ or W burns, ← → or A D rotate. You can do both at once. Space pauses.')
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
 }
 
 function beginFlight(note: string): void {
@@ -105,11 +203,13 @@ function beginFlight(note: string): void {
 }
 
 function resetBrain(): void {
+  leaveManual()
   agent.resetBrain()
   beginFlight('New random brain. It has to learn the landing again.')
 }
 
 async function loadLandingWeights(): Promise<void> {
+  leaveManual()
   try {
     const response = await fetch('./landing-brain.json')
     if (!response.ok) {
@@ -149,6 +249,7 @@ function saveBrain(): void {
 }
 
 function loadBrain(): void {
+  leaveManual()
   try {
     const saved = loadRun()
     if (!saved || !agent.restoreWeights(saved.brain)) {
@@ -181,15 +282,17 @@ function loadBrain(): void {
 }
 
 function finishEpisode(outcome: Outcome): void {
-  returns.push(env.episodeReturn)
-  lands.push(outcome === 'land' ? 1 : 0)
-  epsilons.push(agent.epsilon())
-  losses.push(agent.lastLoss ?? (losses.length > 0 ? losses[losses.length - 1] : 0))
-  if (returns.length > 240) {
-    returns.shift()
-    lands.shift()
-    epsilons.shift()
-    losses.shift()
+  if (!manual) {
+    returns.push(env.episodeReturn)
+    lands.push(outcome === 'land' ? 1 : 0)
+    epsilons.push(agent.epsilon())
+    losses.push(agent.lastLoss ?? (losses.length > 0 ? losses[losses.length - 1] : 0))
+    if (returns.length > 240) {
+      returns.shift()
+      lands.shift()
+      epsilons.shift()
+      losses.shift()
+    }
   }
   lastOutcome = outcome
   banner.textContent = outcome === 'land' ? 'Touchdown' : outcome === 'crash' ? 'Vehicle lost' : 'Out of time'
@@ -200,10 +303,12 @@ function finishEpisode(outcome: Outcome): void {
   holdUntil = now + (speed <= 1 ? 900 : speed <= 4 ? 160 : 0)
   if (outcome === 'crash') shake = 1
   if (outcome === 'land' || outcome === 'crash') scene.burst(env.state, outcome)
-  const wasLocked = agent.locked
-  agent.noteEpisode(outcome === 'land', episode)
-  if (!wasLocked && agent.locked && !agent.forceGreedy) {
-    panel.setNote('Landing learned. Weight updates are paused so more flights do not erase it.')
+  if (!manual) {
+    const wasLocked = agent.locked
+    agent.noteEpisode(outcome === 'land', episode)
+    if (!wasLocked && agent.locked && !agent.forceGreedy) {
+      panel.setNote('Landing learned. Weight updates are paused so more flights do not erase it.')
+    }
   }
 }
 
@@ -224,6 +329,7 @@ function frame(now: number): void {
     episode += 1
     env.reset()
   }
+  const pilot = pilotInput()
   let spawnFlame = false
   let spawnRcs = 0
   let steps = 0
@@ -232,6 +338,17 @@ function frame(now: number): void {
     while (acc >= DT && steps < 24) {
       acc -= DT
       steps += 1
+      if (manual) {
+        const result = env.stepPilot(pilot.burn, pilot.turn)
+        if (env.lastFired && pilot.burn) spawnFlame = true
+        if (env.lastFired && pilot.turn !== 0) spawnRcs = pilot.turn < 0 ? 2 : 3
+        if (result.done) {
+          finishEpisode(result.outcome)
+          acc = 0
+          break
+        }
+        continue
+      }
       if (held === 0) {
         decisionObs.set(env.obs)
         agent.act(env.obs)
@@ -255,6 +372,11 @@ function frame(now: number): void {
     }
     if (steps >= 24) acc = 0
   }
+  for (const button of stickButtons) {
+    const kind = button.dataset.pilot
+    const on = kind === 'burn' ? pilot.burn : kind === 'left' ? pilot.turn < 0 : pilot.turn > 0
+    button.classList.toggle('on', on)
+  }
   if (shake > 0) shake *= Math.exp(-2.8 * realDt)
   if (bannerUntil > 0 && now > bannerUntil) banner.hidden = true
 
@@ -273,6 +395,7 @@ function frame(now: number): void {
     mood,
     paused,
     fixed: agent.forceGreedy,
+    manual,
     time: now / 1000,
     shake,
     dt: realDt,
@@ -282,19 +405,21 @@ function frame(now: number): void {
 
   const chart = sizeCanvas(chartCanvas)
   drawCharts(chart.ctx, chart.w, chart.h, returns, lands, epsilons, losses)
-  if (steps === 0) agent.net.forward(env.obs)
+  const shownAction = manual ? (pilot.burn ? 1 : pilot.turn < 0 ? 2 : pilot.turn > 0 ? 3 : 0) : agent.lastAction
+  if (manual || steps === 0) agent.net.forward(env.obs)
   const net = sizeCanvas(netCanvas)
   drawNetwork(net.ctx, net.w, net.h, {
-    input: steps === 0 ? env.obs : decisionObs,
+    input: manual || steps === 0 ? env.obs : decisionObs,
     h1: agent.net.h1,
     h2: agent.net.h2,
     q: agent.net.q,
-    action: agent.lastAction,
-    exploring: agent.exploring,
+    action: shownAction,
+    exploring: manual ? false : agent.exploring,
   })
   panel.update({
     state: env.state,
-    action: env.lastAction,
+    action: shownAction,
+    command: manual ? commandLabel(pilot.burn, pilot.turn) : undefined,
     wind: params.wind,
     padHalf: params.padHalf,
     episode,

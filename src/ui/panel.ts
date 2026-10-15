@@ -12,6 +12,7 @@ export interface PanelView {
   flightReturn: number
   successRate: number
   meanReturn: number
+  command?: string
 }
 
 interface Handlers {
@@ -21,6 +22,7 @@ interface Handlers {
   onSave: () => void
   onLoad: () => void
   onLanding: () => void
+  onPlay: () => void
   onParam: (key: keyof WorldParams, value: number) => void
 }
 
@@ -28,6 +30,7 @@ export interface Panel {
   update(view: PanelView): void
   setSpeed(speed: number): void
   setPaused(paused: boolean): void
+  setManual(manual: boolean): void
   setNote(text: string): void
 }
 
@@ -40,6 +43,8 @@ export function mountPanel(params: WorldParams, handlers: Handlers): Panel {
   must<HTMLButtonElement>('save').addEventListener('click', handlers.onSave)
   must<HTMLButtonElement>('load').addEventListener('click', handlers.onLoad)
   must<HTMLButtonElement>('landing').addEventListener('click', handlers.onLanding)
+  const play = must<HTMLButtonElement>('play')
+  play.addEventListener('click', handlers.onPlay)
   speeds.forEach((button) => {
     button.addEventListener('click', () => handlers.onSpeed(Number(button.dataset.speed)))
   })
@@ -113,7 +118,7 @@ export function mountPanel(params: WorldParams, handlers: Handlers): Panel {
       spin.set(`${spinDeg.toFixed(1)}°/s`, unit(spinDeg, -90, 90), Math.abs(s.omega) <= LIMITS.omega, [unit(-spinLimit, -90, 90), unit(spinLimit, -90, 90)])
       fuel.set(`${Math.round(s.fuel * 100)}%`, unit(s.fuel, 0, 1), s.fuel > 0.15, [0.15, 1])
       wind.set(`${view.wind.toFixed(2)} m/s²`, unit(view.wind, -2, 2), null)
-      action.textContent = `Engine command: ${ACTION_LABELS[view.action] ?? 'Idle'}`
+      action.textContent = `Engine command: ${view.command ?? ACTION_LABELS[view.action] ?? 'Idle'}`
 
       attempt.textContent = String(view.episode)
       eps.textContent = `${Math.round(view.epsilon * 100)}%`
@@ -140,6 +145,11 @@ export function mountPanel(params: WorldParams, handlers: Handlers): Panel {
     setPaused(paused) {
       pause.textContent = paused ? 'Resume' : 'Pause'
       pause.setAttribute('aria-pressed', paused ? 'true' : 'false')
+    },
+    setManual(manual) {
+      play.classList.toggle('on', manual)
+      play.textContent = manual ? 'Playing' : 'Play'
+      play.setAttribute('aria-pressed', manual ? 'true' : 'false')
     },
     setNote(text) {
       note.textContent = text

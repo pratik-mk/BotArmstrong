@@ -13,7 +13,7 @@
           <p class="eyebrow">Live in your browser</p>
           <h1>BotArmstrong</h1>
           <p class="lede">
-            Learn from random weights, or load the landing weights for a network that already touches down.
+            Learn from random weights, load a landing brain, or fly the rocket yourself.
           </p>
         </div>
         <div class="top-actions">
@@ -23,6 +23,7 @@
             <button type="button" data-speed="16">16×</button>
           </div>
           <button type="button" id="pause">Pause</button>
+          <button type="button" id="play">Play</button>
           <button type="button" id="landing">Landing weights</button>
           <button type="button" id="reset">Reset brain</button>
           <button type="button" id="save">Save</button>
@@ -34,6 +35,11 @@
         <section class="stage" aria-label="Landing view">
           <canvas id="world"></canvas>
           <div id="banner" class="banner" hidden></div>
+          <div id="stick" class="stick" hidden>
+            <button type="button" data-pilot="left">Left</button>
+            <button type="button" data-pilot="burn">Main</button>
+            <button type="button" data-pilot="right">Right</button>
+          </div>
         </section>
         <aside>
           <section>
